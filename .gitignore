@@ -1,0 +1,11 @@
+# Local secrets and runtime files
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+utility_billing.db
+utility_billing_*.db
+frontend/node_modules/
+frontend/dist/
