@@ -172,15 +172,15 @@ function App() {
   const [showRechargeMeterSuggestions, setShowRechargeMeterSuggestions] = useState(false);
   const [rechargeMessage, setRechargeMessage] = useState("");
   const [recharging, setRecharging] = useState(false);
-  const [paymentNotice, setPaymentNotice] = useState("");
-  useEffect(() => {
+  const [paymentNotice] = useState(() => {
     const paymentResult = new URLSearchParams(window.location.search).get("payment");
-    if (!paymentResult) return;
-    setPaymentNotice(paymentResult === "success"
-      ? "Payment received. Your meter balance has been updated."
-      : paymentResult === "cancelled"
-        ? "Payment was cancelled. Your meter balance was not changed."
-        : "Payment was not completed. Your meter balance was not changed.");
+    if (!paymentResult) return "";
+    if (paymentResult === "success") return "Payment received. Your meter balance has been updated.";
+    if (paymentResult === "cancelled") return "Payment was cancelled. Your meter balance was not changed.";
+    return "Payment was not completed. Your meter balance was not changed.";
+  });
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has("payment")) return;
     window.history.replaceState({}, "", window.location.pathname);
   }, []);
 
