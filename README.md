@@ -1,48 +1,50 @@
 # OmniGRID
 
-OmniGRID is a utility billing demo for managing electricity, water, and gas meters. Customers can create an account, track saved meters, recharge a meter through the SSLCOMMERZ sandbox, pay meter bills, request meter loans, and review transactions.
+OmniGRID is a utility billing demo for electricity, water, and gas services. Customers can create an account, save meter numbers, recharge meters through the SSLCOMMERZ sandbox, request loans, and view balances and transaction history.
+
+> **Project status:** Student/demo project. Online payments use the SSLCOMMERZ sandbox. Electricity bill payments are currently supported; water and gas bills are not yet available.
 
 ## Features
 
-- Customer sign-up with an automatically assigned customer ID and password-based sign-in
-- Customer details and password hashes stored in SQLite
-- Separate saved meters, balances, and loans for each customer and utility category
-- Meter recharge through SSLCOMMERZ sandbox checkout
-- Meter bill payments deducted from the selected electricity meter balance; any shortfall is recorded as a loan
-- Transaction history and balance/loan breakdowns
-- React dashboard with utility category and meter selection
+- Customer accounts with an automatically generated ID based on the customer’s initials
+- Password-based sign-in; passwords are stored as hashes
+- Customer information and meter records stored in SQLite
+- Separate meters, balances, and loans for each customer and utility category
+- Saved meter suggestions scoped to the signed-in customer
+- SSLCOMMERZ sandbox checkout for meter recharges
+- Transaction history for recharges, loans, and bills
+- Electricity bill calculation at **BDT 5.50 per unit**
+- Bill costs deducted from the selected meter balance; any unpaid amount is recorded as a loan
 
-## Tech stack
+## Technology
 
-- Python and Flask API
-- SQLite database
-- React, Vite, and Tailwind CSS
+- **Backend:** Python, Flask, SQLite
+- **Frontend:** React, Vite, Tailwind CSS
+- **Payments:** SSLCOMMERZ sandbox
 
 ## Requirements
 
 - Python 3.10 or newer
-- Node.js 20.19+ or 22.12+ and npm (required by the installed Vite version)
-- SSLCOMMERZ sandbox store credentials to test online checkout
+- Node.js 20.19+ or 22.12+ and npm
+- SSLCOMMERZ sandbox Store ID and Store Password to test checkout
+- A public HTTPS tunnel to receive payment callbacks during local testing
 
 ## Run locally on Windows
 
-### 1. Configure the backend
+Run the backend and frontend in separate terminals.
 
-From the project folder, create and activate a Python virtual environment, then install Flask:
+### 1. Set up the backend
+
+From the project root:
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install Flask
-```
-
-Copy the environment template and edit `.env` with your SSLCOMMERZ sandbox details:
-
-```powershell
 Copy-Item .env.example .env
 ```
 
-Set these values in `.env`:
+Open `.env` and configure the SSLCOMMERZ sandbox credentials:
 
 ```dotenv
 SSLCOMMERZ_STORE_ID=your_sandbox_store_id
@@ -51,19 +53,33 @@ SSLCOMMERZ_CALLBACK_BASE_URL=https://your-public-https-tunnel
 FRONTEND_BASE_URL=http://localhost:5173
 ```
 
-Use the HTTPS URL from your tunnel for `SSLCOMMERZ_CALLBACK_BASE_URL`; for example, when using ngrok, start a tunnel to port 5000 and put its `https://...` address here. Keep the store password private and do not commit `.env`.
+Replace the example callback URL with your public HTTPS tunnel URL. For example, if using ngrok, start a tunnel to port `5000`:
 
-Start the backend in the project folder:
+```powershell
+ngrok http 5000
+```
+
+Copy the HTTPS URL ngrok provides into `SSLCOMMERZ_CALLBACK_BASE_URL`. If the tunnel URL changes, update `.env` and restart the backend.
+
+Keep `.env` private. Do not add real payment credentials to GitHub.
+
+Start Flask from the project root:
 
 ```powershell
 python backend.py
 ```
 
-The Flask API runs at `http://localhost:5000`. It initializes `utility_billing.db` in the project folder on startup.
+The API runs at:
 
-### 2. Start the frontend
+```text
+http://localhost:5000
+```
 
-Open a second terminal and run:
+The backend initializes `utility_billing.db` automatically when it starts.
+
+### 2. Set up the frontend
+
+Open another terminal:
 
 ```powershell
 cd frontend
@@ -71,38 +87,112 @@ npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite, usually `http://localhost:5173`. The Vite development server forwards `/api` requests to the Flask backend on port 5000.
+Open the local URL printed by Vite, usually:
 
-### 3. Test payment callbacks
+```text
+http://localhost:5173
+```
 
-SSLCOMMERZ must reach the backend's callback routes over public HTTPS. Start your HTTPS tunnel to local port 5000 and make sure its URL matches `SSLCOMMERZ_CALLBACK_BASE_URL` in `.env`. Keep the Flask backend and tunnel running during checkout. Use sandbox credentials and sandbox payment details only.
+The Vite development server forwards `/api` requests to the Flask backend at `http://127.0.0.1:5000`.
+
+### 3. Test a sandbox payment
+
+1. Keep the Flask backend, frontend, and HTTPS tunnel running.
+2. Sign in or create a customer account.
+3. Choose **Recharge Meter**, select a utility category, choose or enter a meter number, and enter an amount.
+4. Complete checkout using the test payment details provided by SSLCOMMERZ for your sandbox account.
+5. The backend validates the payment callback before adding the recharge to the meter balance.
+
+Sandbox recharge amounts must be between **BDT 10 and BDT 500,000**.
+
+## Customer and meter behavior
+
+- Sign-up requires a name, age from 18 to 120, a valid mobile number, and a password of 8–128 characters.
+- The customer ID is generated by the backend and is shown after registration.
+- Meter numbers are associated with the customer and utility category.
+- Recharge and loan operations can use electricity, water, or gas meters.
+- Bill payments currently accept saved electricity meters only.
+- A loan adds funds to the selected meter and increases its outstanding loan amount.
+- Local customer ID suggestions are saved in the browser. Meter records and account information are stored in the SQLite database.
+
+## API overview
+
+The frontend uses these Flask routes:
+
+| Method | Route | Purpose |
+|---|---|---|
+| `GET` | `/api/status` | Check backend availability and API version |
+| `POST` | `/api/signup` | Create a customer account |
+| `POST` | `/api/login` | Sign in with customer ID and password |
+| `POST` | `/api/logout` | Sign out |
+| `GET` | `/api/me` | Get the signed-in customer |
+| `GET` | `/api/customer/<customer_id>` | Get customer details |
+| `GET` | `/api/customer/<customer_id>/meters?category=electricity` | List saved meters in a category |
+| `GET` | `/api/customer/<customer_id>/transactions` | Get transaction history |
+| `POST` | `/api/customer/<customer_id>/recharge` | Start a sandbox recharge checkout |
+| `POST` | `/api/customer/<customer_id>/loan` | Add a loan to a selected meter |
+| `POST` | `/api/customer/<customer_id>/bill` | Process an electricity meter bill |
+
+SSLCOMMERZ sends payment callbacks to:
+
+- `/api/payments/success`
+- `/api/payments/fail`
+- `/api/payments/cancel`
+- `/api/payments/ipn`
+
+Customer routes require an authenticated session.
+
+## Database
+
+The SQLite database is created at the project root as `utility_billing.db`.
+
+Main tables:
+
+- `customers` — customer IDs, names, password hashes, age, and mobile numbers
+- `customer_meters` — utility category, meter number, balance, and loan per customer
+- `transactions` — recharge, loan, and bill activity
+- `payment_attempts` — SSLCOMMERZ checkout attempts and their status
+
+The database is local to this project. Back it up separately if you need to preserve customer or transaction records.
 
 ## Useful commands
 
-Run these from the `frontend` folder:
+Run these from the `frontend` directory:
 
 ```powershell
 npm run lint
 npm run build
 ```
 
-Check backend connectivity at `http://localhost:5000/api/status`.
+Check the backend status in a browser:
 
-## Project layout
+```text
+http://localhost:5000/api/status
+```
+
+## Project structure
 
 ```text
 .
-├── backend.py            # Flask API, sessions, payments, and application routes
-├── db.py                 # SQLite connection and schema initialization
-├── customer.py           # Customer model
-├── meter.py              # Meter model
-├── bill.py               # Utility bill calculation
-├── loan.py               # Loan model
-├── utility_billing.db    # Created automatically; local customer and transaction data
-├── .env.example          # Environment variable template
-└── frontend/             # React and Vite client
+├── backend.py             # Flask routes, sessions, billing, loans, and payments
+├── db.py                  # SQLite connection and database initialization
+├── bill.py                # Electricity bill calculation
+├── customer.py            # Customer model
+├── loan.py                # Loan model
+├── meter.py               # Meter model
+├── .env.example           # Environment variable template
+├── README.md
+└── frontend/
+    ├── package.json
+    ├── vite.config.js     # Proxies API requests to Flask
+    └── src/
+        ├── App.jsx
+        ├── App.css
+        └── index.css
 ```
 
-## Local data and secrets
+## Secrets and local files
 
-`.env`, the SQLite database, Python virtual environments, `frontend/node_modules`, and the generated frontend build are excluded by `.gitignore`. The database contains customer and transaction data; keep it private and back it up separately if you need to preserve local records. Do not use this demo with real payment credentials or production customer data.
+The root `.gitignore` excludes `.env`, the SQLite database, Python virtual environments, frontend dependencies, and the generated frontend build. Keep those exclusions in place when publishing the project.
+
+Use sandbox credentials and test data only. This project has not been configured as a production payment or customer-data system.
